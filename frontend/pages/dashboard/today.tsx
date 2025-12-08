@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient";
 
 type Task = {
   id: string;
@@ -19,7 +19,7 @@ export default function TodayDashboard() {
     setError(null);
 
     try {
-      // TODO:
+      // TODO ✔️:
       // - Query tasks that are due today and not completed
       // - Use supabase.from("tasks").select(...)
       // - You can do date filtering in SQL or client-side
@@ -29,8 +29,18 @@ export default function TodayDashboard() {
       //   .from("tasks")
       //   .select("*")
       //   .eq("status", "open");
-
-      setTasks([]);
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("status", "open")
+        .gte("due_at", start.toISOString())
+        .lte("due_at", end.toISOString());
+      if (error) throw error;
+      setTasks(data || []);
     } catch (err: any) {
       console.error(err);
       setError("Failed to load tasks");
@@ -41,9 +51,16 @@ export default function TodayDashboard() {
 
   async function markComplete(id: string) {
     try {
-      // TODO:
+      // TODO✔️:
       // - Update task.status to 'completed'
       // - Re-fetch tasks or update state optimistically
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: "completed" })
+        .eq("id", id);
+      if (error) throw error;
+      
+      fetchTasks();
     } catch (err: any) {
       console.error(err);
       alert("Failed to update task");
@@ -60,7 +77,7 @@ export default function TodayDashboard() {
   return (
     <main style={{ padding: "1.5rem" }}>
       <h1>Today&apos;s Tasks</h1>
-      {tasks.length === 0 && <p>No tasks due today 🎉</p>}
+      {tasks.length === 0 && <p>No tasks due for today</p>}
 
       {tasks.length > 0 && (
         <table>
