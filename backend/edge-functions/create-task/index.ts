@@ -31,11 +31,33 @@ serve(async (req: Request) => {
     const body = (await req.json()) as Partial<CreateTaskPayload>;
     const { application_id, task_type, due_at } = body;
 
-    // TODO: validate application_id, task_type, due_at
+    // TODO ✔️: validate application_id, task_type, due_at
+    if (!application_id || !task_type || !due_at) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // - check task_type in VALID_TYPES
+    if (!VALID_TYPES.includes(task_type)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid task_type" }),
+
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
     // - parse due_at and ensure it's in the future
 
-    // TODO: insert into tasks table using supabase client
+    const dueDate = new Date(due_at);
+    if (isNaN(dueDate.getTime()) || dueDate <= new Date()) {
+      return new Response(
+        JSON.stringify({ error: "due_at must be a valid future date" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // TODO ✔️: insert into tasks table using supabase client
 
     // Example:
     // const { data, error } = await supabase
@@ -44,18 +66,41 @@ serve(async (req: Request) => {
     //   .select()
     //   .single();
 
-    // TODO: handle error and return appropriate status code
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        application_id,
+        type: task_type,
+        due_at,
+        tenant_id: "00000000-0000-0000-0000-000000000000",
+      })
+      .select()
+      .single();
+
+    // TODO ✔️: handle error and return appropriate status code
+    if (error) {
+      console.error("Insert error:", error);
+      return new Response(JSON.stringify({ error: "Database insert failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    await supabase.channel("task-events").send({
+      type: "broadcast",
+      event: "task.created",
+      payload: { task_id: data.id },
+    });
 
     // Example successful response:
     // return new Response(JSON.stringify({ success: true, task_id: data.id }), {
     //   status: 200,
     //   headers: { "Content-Type": "application/json" },
     // });
-
-    return new Response(
-      JSON.stringify({ error: "Not implemented. Please complete this function." }),
-      { status: 501, headers: { "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: true, task_id: data.id }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error(err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
